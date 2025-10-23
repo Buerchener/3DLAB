@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>3DLab 工时→打印额度 动态计算器</title>
   <style>
     :root{
@@ -63,11 +63,24 @@
     }
     @media (max-width: 600px){
       .grid.cols-4{grid-template-columns:1fr}
-      .title{font-size:24px}
-      .kpi .value{font-size:28px}
-      thead th{font-size:11px}
-      tbody td{font-size:14px}
+      .title{font-size:22px}
+      .kpi .value{font-size:26px}
       .row{flex-wrap:wrap}
+      .btn{width:100%}
+      .btn.secondary{order:2}
+      .btn + .btn{margin-left:0;margin-top:8px}
+      .table-wrap{border-radius:12px}
+      thead{display:none}
+      table{border-spacing:0 12px}
+      tbody td{display:block;width:100%;font-size:15px;border-left:1px solid #263159;border-right:1px solid #263159}
+      tbody td:first-child{border-bottom-left-radius:0;border-top-right-radius:12px}
+      tbody td:last-child{border-top-right-radius:0;border-bottom-left-radius:12px}
+      tbody tr{position:relative;padding-top:8px}
+      tbody tr td[data-k="g"]::before{content:"可兑换克重";display:block;color:var(--muted);font-size:12px;margin-bottom:4px}
+      tbody tr td[data-k="v"]::before{content:"对应耗材价值";display:block;color:var(--muted);font-size:12px;margin-bottom:4px}
+      tbody tr td:nth-child(1) input{width:100%}
+      tbody tr td:nth-child(2) input{width:100%}
+      tbody tr td:last-child{display:flex;justify-content:flex-end}
     }
   </style>
 </head>
@@ -116,11 +129,11 @@
 
     <!-- 成员列表 -->
     <div class="card grow" aria-label="成员兑换列表" style="display:flex;flex-direction:column;min-height:0">
-      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div class="kpi"><span class="unit">输入成员工时，自动计算兑换额度</span></div>
-        <div class="row">
-          <button class="btn" id="addRow">+ 添加成员</button>
-          <button class="btn secondary" id="clearAll" style="margin-left:8px">清空表格</button>
+      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap">
+        <div class="kpi" style="min-width:200px"><span class="unit">输入成员工时，自动计算兑换额度</span></div>
+        <div class="row" style="width:fit-content;min-width:220px;flex:1">
+          <button class="btn" id="addRow" style="flex:1">+ 添加成员</button>
+          <button class="btn secondary" id="clearAll" style="margin-left:8px;flex:1">清空表格</button>
         </div>
       </div>
 
