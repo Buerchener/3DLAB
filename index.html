@@ -32,8 +32,9 @@
     input:focus{border-color:var(--acc);box-shadow:0 0 0 4px rgba(110,168,254,.18)}
     ::placeholder{color:#6b7280}
     .kpi{display:flex;align-items:baseline;gap:8px}
-    .kpi .value{font-weight:800;font-size:32px;background:linear-gradient(90deg,#b9c4ff 0%,#8ef6d2 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
-    .kpi .unit{color:var(--muted)}
+    .kpi{flex-wrap:nowrap}
+    .kpi .value{font-weight:800;font-size:32px;background:linear-gradient(90deg,#b9c4ff 0%,#8ef6d2 100%);-webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap}
+    .kpi .unit{color:var(--muted);white-space:nowrap}
     .btn{appearance:none;border:none;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer;background:linear-gradient(90deg,var(--acc),#8aa8ff);color:#0a1022;box-shadow:0 6px 16px rgba(64,87,167,.35);transition:transform .12s ease, box-shadow .12s ease, filter .12s ease}
     .btn:hover{transform:translateY(-1px);box-shadow:0 10px 26px rgba(64,87,167,.5)}
     .btn:active{transform:translateY(0)}
@@ -137,7 +138,7 @@
         <div class="row" style="gap:8px;flex:1;justify-content:flex-end;flex-wrap:wrap">
           <input id="name" type="text" placeholder="姓名" style="max-width:180px;flex:1;min-width:120px" />
           <input id="hours" type="number" inputmode="decimal" min="0" step="0.1" placeholder="工时" style="max-width:140px;flex:1;min-width:100px" />
-          <button class="btn" id="submitBtn" type="button" onclick="submitData()">更改并上传</button>
+          <button class="btn" id="submitBtn" type="button" onclick="submitData()">更改</button>
         </div>
       </div>
 
@@ -284,7 +285,8 @@
       const hours = isNaN(hoursValue) ? 0 : hoursValue;
 
       try{
-        if(btn){ btn.disabled = true; btn.textContent = '上传中…'; }
+        if(btn){ btn.disabled = true; btn.textContent = '更改中…'; }
+        // 直接更新到后端成员列表（同名覆盖）
         const res = await fetch('/api/submit_and_add', {
           method: 'POST',
           headers: { 'Content-Type':'application/json' },
@@ -292,11 +294,11 @@
         });
         const data = await res.json();
         if(data && data.state){ state = data.state; setInputsFromState(); renderAll(); }
-        alert('✅ 数据已上传成功！');
+        alert('✅ 已在网页中更新！');
       }catch(e){
         alert('网络或服务器错误，稍后重试');
       }finally{
-        if(btn){ btn.disabled = false; btn.textContent = '上传到 Google Sheets'; }
+        if(btn){ btn.disabled = false; btn.textContent = '更改'; }
       }
     }
 
