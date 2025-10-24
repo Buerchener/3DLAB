@@ -31,9 +31,8 @@
     input:hover{border-color:#334078}
     input:focus{border-color:var(--acc);box-shadow:0 0 0 4px rgba(110,168,254,.18)}
     ::placeholder{color:#6b7280}
-    .kpi{display:flex;align-items:baseline;gap:8px}
-    .kpi{flex-wrap:nowrap}
-    .kpi .value{font-weight:800;font-size:32px;background:linear-gradient(90deg,#b9c4ff 0%,#8ef6d2 100%);-webkit-background-clip:text;background-clip:text;color:transparent;white-space:nowrap}
+    .kpi{display:flex;align-items:baseline;gap:8px;flex-wrap:nowrap}
+    .kpi .value{font-weight:800;font-size:32px;color:var(--fg);white-space:nowrap}
     .kpi .unit{color:var(--muted);white-space:nowrap}
     .btn{appearance:none;border:none;border-radius:12px;padding:10px 14px;font-weight:700;cursor:pointer;background:linear-gradient(90deg,var(--acc),#8aa8ff);color:#0a1022;box-shadow:0 6px 16px rgba(64,87,167,.35);transition:transform .12s ease, box-shadow .12s ease, filter .12s ease}
     .btn:hover{transform:translateY(-1px);box-shadow:0 10px 26px rgba(64,87,167,.5)}
@@ -173,24 +172,80 @@
       return new Intl.NumberFormat('zh-CN',{minimumFractionDigits:0, maximumFractionDigits:0}).format(n);
     }
 
-    // ---- 后端集成 ----
+    // ---- 纯前端 localStorage 持久化 ----
     let state = null;
-
-    async function api(method, url, data){
-      const res = await fetch(url, {
-        method,
-        headers: data ? { 'Content-Type':'application/json' } : undefined,
-        body: data ? JSON.stringify(data) : undefined
-      });
-      if(!res.ok){
-        const text = await res.text();
-        throw new Error(text || (res.status+''));
-      }
-      return await res.json();
-    }
 
     function debounce(fn, delay=300){
       let t; return (...args)=>{ clearTimeout(t); t=setTimeout(()=>fn(...args), delay); };
+    }
+
+    function defaultState(){
+      return {
+        S: 600,
+        p: 0.5,
+        c: 0.045,
+        H: 150,
+        nextId: 4,
+        members: [
+          {id:1, name:"张三", hours:5},
+          {id:2, name:"李四", hours:8},
+          {id:3, name:"王五", hours:10}
+        ]
+      };
+    }
+
+    function loadState(){
+      try{
+        const saved = localStorage.getItem('3dlab_state');
+        if(saved){
+          state = JSON.parse(saved);
+        }else{
+          state = defaultState();
+          saveState();
+        }
+      }catch(e){
+        state = defaultState();
+        saveState();
+      }
+    }
+
+    function saveState(){
+      try{
+        localStorage.setItem('3dlab_state', JSON.stringify(state));
+      }catch(e){
+        console.error('保存失败', e);
+      }
+    }
+
+    function computeResponse(){
+      const Sv = parseFloat(state.S)||0;
+      const pv = parseFloat(state.p)||0;
+      const cv = parseFloat(state.c)||0.000001;
+      const Hv = parseFloat(state.H)||1;
+      const r = (Sv*pv)/(cv*Hv);
+      const rCeil = Math.ceil(r);
+      
+      const members = (state.members||[]).map(m=>{
+        const hours = parseFloat(m.hours)||0;
+        const g = Math.ceil(hours * rCeil);
+        const v = Math.ceil(g * cv);
+        return {
+          id: m.id,
+          name: m.name||'',
+          hours,
+          g,
+          v
+        };
+      });
+
+      return {
+        S: Sv,
+        p: pv,
+        c: cv,
+        H: Hv,
+        R: rCeil,
+        members
+      };
     }
 
     function setInputsFromState(){
@@ -201,11 +256,11 @@
     }
 
     function renderAll(){
-      if(!state) return;
+      const computed = computeResponse();
       // KPI R
-      R.textContent = isFinite(state.R) ? fmtMoney(state.R) : '—';
+      R.textContent = isFinite(computed.R) ? fmtMoney(computed.R) : '—';
       // 表格
-      tbody.innerHTML = (state.members||[]).map(m=>`
+      tbody.innerHTML = (computed.members||[]).map(m=>`
         <tr data-id="${m.id}">
           <td><input type="text" placeholder="姓名" data-k="name" value="${m.name||''}"/></td>
           <td><input type="number" inputmode="decimal" min="0" step="1" data-k="h" value="${m.hours||0}"/></td>
@@ -222,51 +277,57 @@
         const hoursInput = tr.querySelector('input[data-k="h"]');
         const delBtn = tr.querySelector('button[data-action="del"]');
 
-        nameInput.addEventListener('change', async ()=>{
-          const resp = await api('PUT', `/api/members/${id}`, { name: nameInput.value });
-          state = resp; setInputsFromState(); renderAll();
+        nameInput.addEventListener('change', ()=>{
+          const member = state.members.find(m=>m.id===id);
+          if(member){
+            member.name = nameInput.value.trim();
+            saveState();
+            renderAll();
+          }
         });
 
-        const updateHours = debounce(async ()=>{
+        const updateHours = debounce(()=>{
           const hours = parseFloat(hoursInput.value)||0;
-          const resp = await api('PUT', `/api/members/${id}`, { hours });
-          state = resp; setInputsFromState(); renderAll();
+          const member = state.members.find(m=>m.id===id);
+          if(member){
+            member.hours = hours;
+            saveState();
+            renderAll();
+          }
         }, 300);
         hoursInput.addEventListener('input', updateHours);
 
         if (delBtn){
-          delBtn.addEventListener('click', async ()=>{
-            const resp = await api('DELETE', `/api/members/${id}`);
-            state = resp; setInputsFromState(); renderAll();
+          delBtn.addEventListener('click', ()=>{
+            state.members = state.members.filter(m=>m.id!==id);
+            saveState();
+            renderAll();
           });
         }
       }
     }
 
-    const updateGlobals = debounce(async function(){
+    const updateGlobals = debounce(function(){
       const payload = {
         S: parseFloat(S.value)||0,
         p: parseFloat(p.value)||0,
         c: parseFloat(c.value)||0,
         H: parseFloat(H.value)||1,
       };
-      const resp = await api('POST', '/api/state', payload);
-      state = resp; setInputsFromState(); renderAll();
+      Object.assign(state, payload);
+      saveState();
+      renderAll();
     }, 300);
 
     function bindGlobalInputs(){
       for (const el of [S,p,c,H]) el.addEventListener('input', updateGlobals);
     }
 
-    async function loadState(){
-      state = await api('GET', '/api/state');
+    function main(){
+      bindGlobalInputs();
+      loadState();
       setInputsFromState();
       renderAll();
-    }
-
-    async function main(){
-      bindGlobalInputs();
-      await loadState();
     }
 
     if (document.readyState === 'loading') {
@@ -275,8 +336,8 @@
       main();
     }
 
-    // ---- Google Sheets 上传 ----
-    async function submitData(){
+    // ---- 更改成员 ----
+    function submitData(){
       const btn = document.querySelector('button[onclick="submitData()"]');
       const nameEl = document.getElementById('name');
       const hoursEl = document.getElementById('hours');
@@ -284,22 +345,26 @@
       const hoursValue = hoursEl && hoursEl.value !== undefined ? parseFloat(hoursEl.value) : 0;
       const hours = isNaN(hoursValue) ? 0 : hoursValue;
 
-      try{
-        if(btn){ btn.disabled = true; btn.textContent = '更改中…'; }
-        // 直接更新到后端成员列表（同名覆盖）
-        const res = await fetch('/api/submit_and_add', {
-          method: 'POST',
-          headers: { 'Content-Type':'application/json' },
-          body: JSON.stringify({ name, hours })
-        });
-        const data = await res.json();
-        if(data && data.state){ state = data.state; setInputsFromState(); renderAll(); }
-        alert('✅ 已在网页中更新！');
-      }catch(e){
-        alert('网络或服务器错误，稍后重试');
-      }finally{
-        if(btn){ btn.disabled = false; btn.textContent = '更改'; }
+      if(!name){
+        alert('请输入姓名');
+        return;
       }
+
+      // 查找同名成员，存在则覆盖工时，不存在则新增
+      const existing = state.members.find(m=>m.name.trim()===name);
+      if(existing){
+        existing.hours = hours;
+      }else{
+        const nextId = Math.max(...state.members.map(m=>m.id||0), 0) + 1;
+        state.members.push({id:nextId, name, hours});
+      }
+      saveState();
+      renderAll();
+      alert('✅ 已在网页中更新！');
+      
+      // 清空输入
+      if(nameEl) nameEl.value = '';
+      if(hoursEl) hoursEl.value = '';
     }
 
     window.submitData = submitData;
