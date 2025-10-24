@@ -336,8 +336,26 @@
       main();
     }
 
+    // ---- Google Sheets 同步 ----
+    const GS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwaTrUI8t9vPuZW9mw4HMGq8Y-F-8JpjiTnN6-8PSiX5tWpCW2aZbwKcm8-g-4OiI_p/exec';
+
+    async function uploadToGoogleSheets(name, hours, grams){
+      try{
+        const response = await fetch(GS_ENDPOINT, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, hours, grams })
+        });
+        return true;
+      }catch(e){
+        console.error('上传到 Google Sheets 失败:', e);
+        return false;
+      }
+    }
+
     // ---- 更改成员 ----
-    function submitData(){
+    async function submitData(){
       const btn = document.querySelector('button[onclick="submitData()"]');
       const nameEl = document.getElementById('name');
       const hoursEl = document.getElementById('hours');
@@ -350,6 +368,8 @@
         return;
       }
 
+      if(btn){ btn.disabled = true; btn.textContent = '上传中…'; }
+
       // 查找同名成员，存在则覆盖工时，不存在则新增
       const existing = state.members.find(m=>m.name.trim()===name);
       if(existing){
@@ -360,11 +380,20 @@
       }
       saveState();
       renderAll();
-      alert('✅ 已在网页中更新！');
+
+      // 计算克重并上传到 Google Sheets
+      const computed = computeResponse();
+      const member = computed.members.find(m=>m.name.trim()===name);
+      if(member){
+        await uploadToGoogleSheets(name, hours, member.g);
+      }
+
+      alert('✅ 已更新到网页和 Google Sheets！');
       
       // 清空输入
       if(nameEl) nameEl.value = '';
       if(hoursEl) hoursEl.value = '';
+      if(btn){ btn.disabled = false; btn.textContent = '更改'; }
     }
 
     window.submitData = submitData;
