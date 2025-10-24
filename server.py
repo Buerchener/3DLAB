@@ -7,11 +7,15 @@ import math
 import webbrowser
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from urllib.parse import urlparse
+import urllib.request
+import urllib.error
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-INDEX_FILE = "3_dlab_工时兑换网页.html"
+INDEX_FILE = "index.html"
 STATE_PATH = os.path.join(BASE_DIR, "state.json")
+STATE_LOCK = threading.RLock()
+GS_ENDPOINT = "https://script.google.com/macros/s/AKfycbwaTrUI8t9vPuZW9mw4HMGq8Y-F-8JpjiTnN6-8PSiX5tWpCW2aZbwKcm8-g-4OiI_p/exec"
 
 
 def _default_state() -> dict:
@@ -30,23 +34,71 @@ def _default_state() -> dict:
 
 
 def _load_state() -> dict:
-    if not os.path.exists(STATE_PATH):
-        state = _default_state()
-        _save_state(state)
-        return state
-    try:
-        with open(STATE_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        # 出错则回退到默认
-        state = _default_state()
-        _save_state(state)
-        return state
+    with STATE_LOCK:
+        if not os.path.exists(STATE_PATH):
+            state = _default_state()
+            _save_state(state)
+            return state
+        try:
+            with open(STATE_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            # 出错则回退到默认
+            state = _default_state()
+            _save_state(state)
+            return state
 
 
 def _save_state(state: dict) -> None:
-    with open(STATE_PATH, "w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False, indent=2)
+    # 原子写入，避免并发写导致文件损坏
+    with STATE_LOCK:
+        tmp_path = STATE_PATH + ".tmp"
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, STATE_PATH)
+
+
+def _ensure_next_id(state: dict) -> int:
+    # 以 members 中的最大 id 为基准，保证 nextId 单调递增
+    members = state.get("members", [])
+    max_id = 0
+    for m in members:
+        try:
+            mid = int(m.get("id", 0))
+            if mid > max_id:
+                max_id = mid
+        except Exception:
+            continue
+    next_id = int(state.get("nextId", max_id + 1) or (max_id + 1))
+    if next_id <= max_id:
+        next_id = max_id + 1
+    state["nextId"] = next_id + 1
+    return next_id
+
+
+def _post_to_google_sheets(name: str, hours: float, grams: float, value: float, upsert: bool = True) -> tuple[bool, str]:
+    payload = {
+        "name": name,
+        "hours": hours,
+        "grams": grams,
+        "value": value,
+        "upsert": bool(upsert),
+        "uniqueBy": "name"
+    }
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(GS_ENDPOINT, data=data, headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            # 2xx 视为成功
+            if 200 <= resp.status < 300:
+                return True, "ok"
+            return False, f"http_status_{resp.status}"
+    except urllib.error.HTTPError as e:
+        return False, f"http_error_{e.code}"
+    except urllib.error.URLError as e:
+        return False, f"url_error_{getattr(e, 'reason', 'unknown')}"
+    except Exception as e:
+        return False, f"exception_{type(e).__name__}"
 
 
 def _compute_response(state: dict) -> dict:
@@ -119,33 +171,105 @@ class RootMappingHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path == "/api/state":
             body = self._parse_json()
-            state = _load_state()
-            for k in ("S", "p", "c", "H"):
-                if k in body:
-                    state[k] = body[k]
-            _save_state(state)
-            return self._send_json(_compute_response(state))
+            with STATE_LOCK:
+                state = _load_state()
+                for k in ("S", "p", "c", "H"):
+                    if k in body:
+                        state[k] = body[k]
+                _save_state(state)
+                return self._send_json(_compute_response(state))
 
         if parsed.path == "/api/members":
             body = self._parse_json()
-            name = str(body.get("name", ""))
-            hours = float(body.get("hours", 0) or 0)
-            state = _load_state()
-            mid = int(state.get("nextId", 1))
-            state["nextId"] = mid + 1
-            state.setdefault("members", []).append({
-                "id": mid,
-                "name": name,
-                "hours": hours,
-            })
-            _save_state(state)
-            return self._send_json(_compute_response(state), 201)
+            # 输入校验与清洗
+            name = str(body.get("name", "")).strip()
+            if len(name) > 100:
+                name = name[:100]
+            hours = body.get("hours", 0)
+            try:
+                hours = float(hours) if hours is not None else 0.0
+            except Exception:
+                return self._send_json({"error":"hours must be a number"}, 400)
+            if not math.isfinite(hours) or hours < 0:
+                hours = 0.0
+            if hours > 1e7:
+                hours = 1e7
+
+            with STATE_LOCK:
+                state = _load_state()
+                mid = _ensure_next_id(state)
+                # 若名称为空，提供一个占位名称（可在前端再编辑）
+                if not name:
+                    name = f"成员{mid}"
+                state.setdefault("members", []).append({
+                    "id": mid,
+                    "name": name,
+                    "hours": hours,
+                })
+                _save_state(state)
+                return self._send_json(_compute_response(state), 201)
+
+        if parsed.path == "/api/submit_and_add":
+            body = self._parse_json()
+            name = str(body.get("name", "")).strip()
+            if len(name) > 100:
+                name = name[:100]
+            hours = body.get("hours", 0)
+            try:
+                hours = float(hours) if hours is not None else 0.0
+            except Exception:
+                return self._send_json({"error": "hours must be a number"}, 400)
+            if not math.isfinite(hours) or hours < 0:
+                hours = 0.0
+            if hours > 1e7:
+                hours = 1e7
+
+            with STATE_LOCK:
+                state = _load_state()
+                # 按名称去重：存在则覆盖 hours，不存在则新增
+                members = state.setdefault("members", [])
+                existing = None
+                for m in members:
+                    if str(m.get("name", "")).strip() == name and name:
+                        existing = m
+                        break
+                if existing is not None:
+                    existing["hours"] = hours
+                    mid = existing.get("id")
+                else:
+                    mid = _ensure_next_id(state)
+                    if not name:
+                        name = f"成员{mid}"
+                    members.append({
+                        "id": mid,
+                        "name": name,
+                        "hours": hours,
+                    })
+                _save_state(state)
+                computed = _compute_response(state)
+
+            # 根据当前参数计算克重与价值（对齐前端逻辑：向上取整）
+            R_val = float(computed.get("R", 0) or 0)
+            c_val = float(computed.get("c", 0) or 0)
+            grams = math.ceil(hours * R_val)
+            value = math.ceil(grams * c_val)
+
+            uploaded, reason = _post_to_google_sheets(name, hours, grams, value, upsert=True)
+            resp = {
+                "ok": True,
+                "uploaded": uploaded,
+                "reason": reason if not uploaded else "",
+                "state": computed,
+                "payload": {"name": name, "hours": hours, "grams": grams, "value": value}
+            }
+            return self._send_json(resp, 200 if uploaded else 202)
 
         if parsed.path == "/api/clear":
-            state = _load_state()
-            state["members"] = []
-            _save_state(state)
-            return self._send_json(_compute_response(state))
+            with STATE_LOCK:
+                state = _load_state()
+                state["members"] = []
+                _save_state(state)
+                return self._send_json(_compute_response(state))
 
         self.send_error(404, "Not Found")
 
@@ -157,23 +281,29 @@ class RootMappingHandler(SimpleHTTPRequestHandler):
             except ValueError:
                 return self.send_error(400, "Invalid member id")
             body = self._parse_json()
-            state = _load_state()
-            updated = False
-            for m in state.get("members", []):
-                if int(m.get("id")) == member_id:
-                    if "name" in body:
-                        m["name"] = str(body["name"])[:100]
-                    if "hours" in body:
-                        try:
-                            m["hours"] = float(body["hours"]) or 0
-                        except Exception:
-                            m["hours"] = 0
-                    updated = True
-                    break
-            if not updated:
-                return self.send_error(404, "Member not found")
-            _save_state(state)
-            return self._send_json(_compute_response(state))
+            with STATE_LOCK:
+                state = _load_state()
+                updated = False
+                for m in state.get("members", []):
+                    if int(m.get("id")) == member_id:
+                        if "name" in body:
+                            m["name"] = str(body["name"]).strip()[:100]
+                        if "hours" in body:
+                            try:
+                                hv = float(body["hours"]) if body["hours"] is not None else 0.0
+                            except Exception:
+                                return self._send_json({"error":"hours must be a number"}, 400)
+                            if not math.isfinite(hv) or hv < 0:
+                                hv = 0.0
+                            if hv > 1e7:
+                                hv = 1e7
+                            m["hours"] = hv
+                        updated = True
+                        break
+                if not updated:
+                    return self.send_error(404, "Member not found")
+                _save_state(state)
+                return self._send_json(_compute_response(state))
 
         self.send_error(404, "Not Found")
 
@@ -184,13 +314,14 @@ class RootMappingHandler(SimpleHTTPRequestHandler):
                 member_id = int(parsed.path.rsplit("/", 1)[-1])
             except ValueError:
                 return self.send_error(400, "Invalid member id")
-            state = _load_state()
-            before = len(state.get("members", []))
-            state["members"] = [m for m in state.get("members", []) if int(m.get("id")) != member_id]
-            if len(state["members"]) == before:
-                return self.send_error(404, "Member not found")
-            _save_state(state)
-            return self._send_json(_compute_response(state))
+            with STATE_LOCK:
+                state = _load_state()
+                before = len(state.get("members", []))
+                state["members"] = [m for m in state.get("members", []) if int(m.get("id")) != member_id]
+                if len(state["members"]) == before:
+                    return self.send_error(404, "Member not found")
+                _save_state(state)
+                return self._send_json(_compute_response(state))
 
         self.send_error(404, "Not Found")
 

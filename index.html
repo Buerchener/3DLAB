@@ -125,15 +125,14 @@
       </div>
     </div>
 
-    <div style="height:16px"></div>
-
     <!-- 成员列表 -->
     <div class="card grow" aria-label="成员兑换列表" style="display:flex;flex-direction:column;min-height:0">
       <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap">
         <div class="kpi" style="min-width:200px"><span class="unit">输入成员工时，自动计算兑换额度</span></div>
-        <div class="row" style="width:fit-content;min-width:220px;flex:1">
-          <button class="btn" id="addRow" style="flex:1">+ 添加成员</button>
-          <button class="btn secondary" id="clearAll" style="margin-left:8px;flex:1">清空表格</button>
+        <div class="row" style="gap:8px;flex:1;justify-content:flex-end;flex-wrap:wrap">
+          <input id="name" type="text" placeholder="姓名" style="max-width:180px;flex:1;min-width:120px" />
+          <input id="hours" type="number" min="0" step="0.1" placeholder="工时" style="max-width:140px;flex:1;min-width:100px" />
+          <button class="btn" id="submitBtn" type="button" onclick="submitData()">更改并上传</button>
         </div>
       </div>
 
@@ -206,7 +205,7 @@
           <td><input type="number" min="0" step="1" data-k="h" value="${m.hours||0}"/></td>
           <td data-k="g">${isFinite(m.g)? fmtMoney(m.g): '—'}</td>
           <td data-k="v">${isFinite(m.v)? fmtMoney(m.v): '—'}</td>
-          <td><button class="btn warn" type="button" data-action="del">删除</button></td>
+          <td></td>
         </tr>
       `).join('');
 
@@ -215,7 +214,7 @@
         const id = Number(tr.getAttribute('data-id'));
         const nameInput = tr.querySelector('input[data-k="name"]');
         const hoursInput = tr.querySelector('input[data-k="h"]');
-        const delBtn = tr.querySelector('button[data-action="del"]');
+        const delBtn = null;
 
         nameInput.addEventListener('change', async ()=>{
           const resp = await api('PUT', `/api/members/${id}`, { name: nameInput.value });
@@ -229,10 +228,7 @@
         }, 300);
         hoursInput.addEventListener('input', updateHours);
 
-        delBtn.addEventListener('click', async ()=>{
-          const resp = await api('DELETE', `/api/members/${id}`);
-          state = resp; setInputsFromState(); renderAll();
-        });
+        // 删除功能移除
       }
     }
 
@@ -251,16 +247,6 @@
       for (const el of [S,p,c,H]) el.addEventListener('input', updateGlobals);
     }
 
-    async function addMember(){
-      const resp = await api('POST', '/api/members', { name: '', hours: 0 });
-      state = resp; setInputsFromState(); renderAll();
-    }
-
-    async function clearAll(){
-      const resp = await api('POST', '/api/clear');
-      state = resp; setInputsFromState(); renderAll();
-    }
-
     async function loadState(){
       state = await api('GET', '/api/state');
       setInputsFromState();
@@ -269,8 +255,6 @@
 
     async function main(){
       bindGlobalInputs();
-      $('addRow').addEventListener('click', addMember);
-      $('clearAll').addEventListener('click', clearAll);
       await loadState();
     }
 
@@ -279,6 +263,34 @@
     } else {
       main();
     }
+
+    // ---- Google Sheets 上传 ----
+    async function submitData(){
+      const btn = document.querySelector('button[onclick="submitData()"]');
+      const nameEl = document.getElementById('name');
+      const hoursEl = document.getElementById('hours');
+      const name = (nameEl && nameEl.value ? nameEl.value : '').trim();
+      const hoursValue = hoursEl && hoursEl.value !== undefined ? parseFloat(hoursEl.value) : 0;
+      const hours = isNaN(hoursValue) ? 0 : hoursValue;
+
+      try{
+        if(btn){ btn.disabled = true; btn.textContent = '上传中…'; }
+        const res = await fetch('/api/submit_and_add', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json' },
+          body: JSON.stringify({ name, hours })
+        });
+        const data = await res.json();
+        if(data && data.state){ state = data.state; setInputsFromState(); renderAll(); }
+        alert('✅ 数据已上传成功！');
+      }catch(e){
+        alert('网络或服务器错误，稍后重试');
+      }finally{
+        if(btn){ btn.disabled = false; btn.textContent = '上传到 Google Sheets'; }
+      }
+    }
+
+    window.submitData = submitData;
   </script>
 </body>
 </html>
