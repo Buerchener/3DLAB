@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>3DLab 工时→打印额度 动态计算器</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600&display=swap" rel="stylesheet" />
   <style>
     :root{
       --bg:#0b1020;--card:#121830;--muted:#98a2b3;--fg:#e6e9f2;--acc:#6ea8fe;--acc2:#8ef6d2;--warn:#ffd166;
@@ -11,7 +12,7 @@
     }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{margin:0;background:radial-gradient(1200px 800px at 10% -10%,#1b2347 0%,#0b1020 40%,#0b1020 100%);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;line-height:1.6;min-height:100%;display:flex;flex-direction:column;padding-bottom:max(16px, env(safe-area-inset-bottom))}
+    body{margin:0;background:radial-gradient(1200px 800px at 10% -10%,#1b2347 0%,#0b1020 40%,#0b1020 100%);color:var(--fg);font-family:"Noto Sans SC","Microsoft YaHei",-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,"PingFang SC","Hiragino Sans GB",sans-serif;line-height:1.6;min-height:100%;display:flex;flex-direction:column;padding-bottom:max(16px, env(safe-area-inset-bottom))}
     body::before{content:"";position:fixed;inset:0;background:
       radial-gradient(800px 400px at 90% -20%,rgba(110,168,254,.08),transparent 60%),
       radial-gradient(600px 400px at -10% 120%,rgba(142,246,210,.06),transparent 60%);
@@ -121,11 +122,11 @@
       </div>
       <div style="height:12px"></div>
       <div class="row">
-        <div class="kpi" title="每小时可兑换打印克重 R = S×p ÷ (c×H)">
+        <div class="kpi" title="每小时可兑换打印克重 R = S &times; p ÷ (c &times; H)">
           <span class="value" id="R">—</span>
-          <span class="unit">g / 小时</span>
+          <span class="unit">g/小时</span>
         </div>
-        <div class="note">公式：<b>R = S × p ÷ (c × H)</b>；显示为向上取整（例如 1.333 → 2）。</div>
+        <div class="note">公式：<b>R = S &times; p ÷ (c &times; H)</b>；显示为向上取整（例如 1.333 → 2）。</div>
       </div>
     </div>
 
@@ -156,7 +157,7 @@
           </tbody>
         </table>
       </div>
-      <div class="note" style="margin-top:8px">说明：克重 = ceil(工时 × R)；价值 = ceil(克重 × c)。
+      <div class="note" style="margin-top:8px">说明：克重 = ceil(工时 &times; R)；价值 = ceil(克重 &times; c)。
         c 为每克耗材价格，例：45 元/卷（1kg） → 0.045 元/克。
       </div>
     </div>
@@ -209,7 +210,7 @@
           <td><input type="number" inputmode="decimal" min="0" step="1" data-k="h" value="${m.hours||0}"/></td>
           <td data-k="g">${isFinite(m.g)? fmtMoney(m.g): '—'}</td>
           <td data-k="v">${isFinite(m.v)? fmtMoney(m.v): '—'}</td>
-          <td></td>
+          <td><button class="btn warn" type="button" data-action="del">删除</button></td>
         </tr>
       `).join('');
 
@@ -218,7 +219,7 @@
         const id = Number(tr.getAttribute('data-id'));
         const nameInput = tr.querySelector('input[data-k="name"]');
         const hoursInput = tr.querySelector('input[data-k="h"]');
-        const delBtn = null;
+        const delBtn = tr.querySelector('button[data-action="del"]');
 
         nameInput.addEventListener('change', async ()=>{
           const resp = await api('PUT', `/api/members/${id}`, { name: nameInput.value });
@@ -232,7 +233,12 @@
         }, 300);
         hoursInput.addEventListener('input', updateHours);
 
-        // 删除功能移除
+        if (delBtn){
+          delBtn.addEventListener('click', async ()=>{
+            const resp = await api('DELETE', `/api/members/${id}`);
+            state = resp; setInputsFromState(); renderAll();
+          });
+        }
       }
     }
 

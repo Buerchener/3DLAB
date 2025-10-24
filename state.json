@@ -3,12 +3,6 @@
   "p": 0.5,
   "c": 0.045,
   "H": 150,
-  "nextId": 12,
-  "members": [
-    {
-      "id": 11,
-      "name": "李鸿宇",
-      "hours": 4.0
-    }
-  ]
+  "nextId": 13,
+  "members": []
 }
