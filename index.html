@@ -18,11 +18,13 @@
       radial-gradient(600px 400px at -10% 120%,rgba(142,246,210,.06),transparent 60%);
       pointer-events:none;z-index:-1;filter:blur(0.5px)
     }
-    .container{max-width:1080px;margin:24px auto;padding:16px;display:flex;flex-direction:column;flex:1;min-height:0}
+    .container{max-width:1080px;margin:24px auto;padding:16px;display:flex;flex-direction:column;gap:16px;flex:1;min-height:0}
     .title{font-weight:800;font-size:28px;letter-spacing:.3px;display:flex;gap:12px;align-items:center}
-    .subtitle{color:var(--muted);margin:6px 0 18px}
-    .card{background:linear-gradient(180deg,#151c37,#101631);border:1px solid #263159;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.35);padding:18px;transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease}
+    .subtitle{color:var(--muted);margin:6px 0 0;font-size:14px}
+    .card{background:linear-gradient(180deg,#151c37,#101631);border:1px solid #263159;border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.35);padding:18px;transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease;flex-shrink:0}
     .card:hover{transform:translateY(-2px);box-shadow:0 14px 40px rgba(0,0,0,.45);border-color:#2e3a6b}
+    .card.params{min-height:auto}
+    .card.calculator{flex:1;min-height:400px;max-height:calc(100vh - 300px)}
     .grid{display:grid;gap:14px}
     .grid.cols-2{grid-template-columns:1fr 1fr}
     .grid.cols-4{grid-template-columns:repeat(4,minmax(0,1fr))}
@@ -61,15 +63,18 @@
     /* 响应式 */
     @media (max-width: 900px){
       .grid.cols-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .card.calculator{max-height:calc(100vh - 350px)}
     }
     @media (max-width: 600px){
-      .container{padding:12px;margin:12px auto}
+      .container{padding:12px;margin:12px auto;gap:12px}
       .grid.cols-4{grid-template-columns:1fr;gap:10px}
       .grid.cols-2{grid-template-columns:1fr;gap:10px}
       .title{font-size:20px;gap:8px}
       .title svg{width:24px;height:24px}
-      .subtitle{font-size:13px;margin:4px 0 12px}
+      .subtitle{font-size:13px;margin:4px 0 0}
       .card{padding:14px;border-radius:12px}
+      .card.params{margin-bottom:0}
+      .card.calculator{min-height:500px;max-height:calc(100vh - 250px)}
       .kpi .value{font-size:24px}
       .kpi .unit{font-size:13px}
       .row{flex-wrap:wrap}
@@ -80,8 +85,8 @@
       .note{font-size:11px}
       
       /* 结果显示优化 */
-      #resultsDisplay{gap:24px;padding:24px 16px}
-      .result-number{font-size:56px !important}
+      #resultsDisplay{gap:20px;padding:20px 16px}
+      .result-number{font-size:52px !important}
       .result-unit{font-size:20px !important}
       .result-label{font-size:12px !important}
     }
@@ -103,7 +108,7 @@
     <div class="subtitle">输入售卖、预算比例、耗材单价与本学期总工时，自动得到每小时可兑换克重 R，并按成员工时实时计算可兑换克重与耗材价值（结果<strong>向上取整</strong>）。</div>
 
     <!-- 输入与结果 -->
-    <div class="card" aria-label="全局参数">
+    <div class="card params" aria-label="全局参数">
       <div class="grid cols-4">
         <div>
           <label for="S">售卖总额 S（元）</label>
@@ -133,7 +138,7 @@
     </div>
 
     <!-- 兑换额度计算器 -->
-    <div class="card grow" aria-label="兑换额度计算" style="display:flex;flex-direction:column;min-height:0">
+    <div class="card calculator" aria-label="兑换额度计算" style="display:flex;flex-direction:column">
       <div style="margin-bottom:16px">
         <div class="kpi" style="margin-bottom:12px"><span class="unit" style="font-size:16px;font-weight:600">输入工时，自动计算兑换额度</span></div>
         <div class="grid cols-2">
