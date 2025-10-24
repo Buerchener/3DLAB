@@ -63,25 +63,27 @@
       .grid.cols-4{grid-template-columns:repeat(2,minmax(0,1fr))}
     }
     @media (max-width: 600px){
-      .grid.cols-4{grid-template-columns:1fr}
-      .title{font-size:22px}
-      .kpi .value{font-size:26px}
+      .container{padding:12px;margin:12px auto}
+      .grid.cols-4{grid-template-columns:1fr;gap:10px}
+      .grid.cols-2{grid-template-columns:1fr;gap:10px}
+      .title{font-size:20px;gap:8px}
+      .title svg{width:24px;height:24px}
+      .subtitle{font-size:13px;margin:4px 0 12px}
+      .card{padding:14px;border-radius:12px}
+      .kpi .value{font-size:24px}
+      .kpi .unit{font-size:13px}
       .row{flex-wrap:wrap}
-      .btn{width:100%;min-height:44px}
-      .btn.secondary{order:2}
-      .btn + .btn{margin-left:0;margin-top:8px}
-      .table-wrap{border-radius:12px}
-      thead{display:none}
-      table{border-spacing:0 12px}
-      tbody td{display:block;width:100%;font-size:15px;border-left:1px solid #263159;border-right:1px solid #263159}
-      tbody td:first-child{border-bottom-left-radius:0;border-top-right-radius:12px}
-      tbody td:last-child{border-top-right-radius:0;border-bottom-left-radius:12px}
-      tbody tr{position:relative;padding-top:8px}
-      tbody tr td[data-k="g"]::before{content:"可兑换克重";display:block;color:var(--muted);font-size:12px;margin-bottom:4px}
-      tbody tr td[data-k="v"]::before{content:"对应耗材价值";display:block;color:var(--muted);font-size:12px;margin-bottom:4px}
-      tbody tr td:nth-child(1) input{width:100%}
-      tbody tr td:nth-child(2) input{width:100%}
-      tbody tr td:last-child{display:flex;justify-content:flex-end}
+      .btn{width:100%;min-height:48px;font-size:15px}
+      input[type="number"],input[type="text"]{padding:10px;font-size:15px}
+      label{font-size:11px}
+      .pill{font-size:11px;padding:4px 8px}
+      .note{font-size:11px}
+      
+      /* 结果显示优化 */
+      #resultsDisplay{gap:24px;padding:24px 16px}
+      .result-number{font-size:56px !important}
+      .result-unit{font-size:20px !important}
+      .result-label{font-size:12px !important}
     }
 
     @media (prefers-reduced-motion: reduce){
@@ -146,20 +148,20 @@
         </div>
       </div>
 
-      <div style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:32px;padding:40px 20px">
+      <div id="resultsDisplay" style="flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:32px;padding:40px 20px">
         <div style="text-align:center">
-          <div class="note" style="margin-bottom:12px;font-size:14px">可兑换克重</div>
+          <div class="note result-label" style="margin-bottom:12px;font-size:14px">可兑换克重</div>
           <div class="kpi" style="justify-content:center">
-            <span class="value" id="resultGrams" style="font-size:48px;color:#8ef6d2">—</span>
-            <span class="unit" style="font-size:24px">g</span>
+            <span class="value result-number" id="resultGrams" style="font-size:48px;color:#8ef6d2">—</span>
+            <span class="unit result-unit" style="font-size:24px">g</span>
           </div>
         </div>
         
         <div style="text-align:center">
-          <div class="note" style="margin-bottom:12px;font-size:14px">对应耗材价值</div>
+          <div class="note result-label" style="margin-bottom:12px;font-size:14px">对应耗材价值</div>
           <div class="kpi" style="justify-content:center">
-            <span class="value" id="resultValue" style="font-size:48px;color:#6ea8fe">—</span>
-            <span class="unit" style="font-size:24px">元</span>
+            <span class="value result-number" id="resultValue" style="font-size:48px;color:#6ea8fe">—</span>
+            <span class="unit result-unit" style="font-size:24px">元</span>
           </div>
         </div>
       </div>
