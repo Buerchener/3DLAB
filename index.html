@@ -167,7 +167,7 @@
       </div>
 
       <div style="margin-top:auto">
-        <button class="btn" id="submitBtn" type="button" onclick="submitData()" style="width:100%;padding:14px;font-size:16px">上传到 Google Sheets</button>
+        <button class="btn" id="submitBtn" type="button" onclick="submitData()" style="width:100%;padding:14px;font-size:16px">上传到维格表</button>
         <div class="note" style="margin-top:12px;text-align:center">公式：克重 = ceil(工时 &times; R)；价值 = ceil(克重 &times; c)</div>
       </div>
     </div>
@@ -302,25 +302,69 @@
       main();
     }
 
-    // ---- Google Sheets 同步 ----
-    const GS_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwaTrUI8t9vPuZW9mw4HMGq8Y-F-8JpjiTnN6-8PSiX5tWpCW2aZbwKcm8-g-4OiI_p/exec';
+    // ---- Vika 维格表同步 ----
+    const VIKA_ENDPOINT = 'https://api.vika.cn/fusion/v1/datasheets/dstpAGYsk4vZ2NF0wD/records';
+    const VIKA_TOKEN = 'uskCMqxG2JOWhhyYANlan34';
 
-    async function uploadToGoogleSheets(name, hours, grams){
+    async function uploadToVika(name, hours, grams, value){
       try{
-        const response = await fetch(GS_ENDPOINT, {
+        // 生成时间戳
+        const now = new Date();
+        const timestamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+        
+        // 构建符合 Vika API 规范的 payload
+        const payload = {
+          records: [
+            {
+              fields: {
+                "姓名": name,
+                "工作时长": hours,
+                "料材克重": grams,
+                "耗材价值": value,
+                "时间": timestamp
+              }
+            }
+          ]
+        };
+
+        console.log('Vika 上传 URL:', VIKA_ENDPOINT);
+        console.log('Vika 上传数据:', JSON.stringify(payload, null, 2));
+
+        const response = await fetch(VIKA_ENDPOINT, {
           method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, hours, grams })
+          headers: {
+            'Authorization': `Bearer ${VIKA_TOKEN}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
         });
+
+        console.log('Vika 响应状态:', response.status, response.statusText);
+
+        if(!response.ok){
+          const errorText = await response.text();
+          console.error('Vika API 错误响应:', errorText);
+          try{
+            const errorJson = JSON.parse(errorText);
+            console.error('Vika 错误详情:', errorJson);
+            alert(`上传失败: ${errorJson.message || errorJson.error || '未知错误'}\n请检查字段名是否与维格表一致`);
+          }catch(e){
+            alert(`上传失败 (HTTP ${response.status}): ${errorText}`);
+          }
+          return false;
+        }
+
+        const result = await response.json();
+        console.log('Vika 上传成功:', result);
         return true;
       }catch(e){
-        console.error('上传到 Google Sheets 失败:', e);
+        console.error('上传到 Vika 失败:', e);
+        alert(`网络错误: ${e.message}`);
         return false;
       }
     }
 
-    // ---- 上传到 Google Sheets ----
+    // ---- 上传到维格表 ----
     async function submitData(){
       const btn = document.getElementById('submitBtn');
       const name = nameInput.value.trim();
@@ -338,21 +382,24 @@
 
       if(btn){ btn.disabled = true; btn.textContent = '上传中…'; }
 
-      // 计算克重
+      // 计算克重和价值
       const result = computeForHours(hours);
       
-      // 上传到 Google Sheets
-      await uploadToGoogleSheets(name, hours, result.g);
+      // 上传到 Vika 维格表
+      const success = await uploadToVika(name, hours, result.g, result.v);
 
-      alert('✅ 已上传到 Google Sheets！');
+      if(success){
+        alert('✅ 已成功同步至维格表！');
+        // 清空输入
+        nameInput.value = '';
+        hoursInput.value = '';
+        resultGrams.textContent = '—';
+        resultValue.textContent = '—';
+      }else{
+        alert('❌ 上传失败，请检查网络或稍后重试');
+      }
       
-      // 清空输入
-      nameInput.value = '';
-      hoursInput.value = '';
-      resultGrams.textContent = '—';
-      resultValue.textContent = '—';
-      
-      if(btn){ btn.disabled = false; btn.textContent = '上传到 Google Sheets'; }
+      if(btn){ btn.disabled = false; btn.textContent = '上传到维格表'; }
     }
 
     window.submitData = submitData;
